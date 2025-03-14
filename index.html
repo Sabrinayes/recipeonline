@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>菜品生成器</title>
+    <style>
+     body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+            color: #333;
+            margin: 0;
+            padding: 20px;
+        }
+
+        #app {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+
+        .tab {
+            display: none;
+        }
+
+        button {
+            background-color: #ff7f50;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #ff6347;
+        }
+
+        input, select {
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            width: 100%;
+        }
+
+        #result {
+            margin-top: 20px;
+            padding: 10px;
+            background-color: #e0f7fa;
+            border-radius: 5px;
+        }
+
+        .item-list {
+            margin-top: 10px;
+        }
+
+        .item-list .item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin: 5px;
+            padding: 10px;
+            background-color: #e0f7fa;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .item-list .item:hover {
+            background-color: #b2ebf2;
+        }
+
+        .delete-button {
+            background-color: #ff4444;
+            color: white;
+            border: none;
+            padding: 5px 10px;
+            border-radius: 5px;
+            cursor: pointer;
+            display: none; /* 默认隐藏 */
+        }
+
+        .delete-button:hover {
+            background-color: #cc0000;
+        }
+
+        .dish-info {
+            margin-top: 10px;
+            padding: 10px;
+            background-color: #e0f7fa;
+            border-radius: 5px;
+        }
+
+        #id-input-section {
+            margin-bottom: 20px;
+        }
+
+        #tabs {
+            display: none; /* 默认隐藏 */
+        }
+
+        .hidden-dish {
+            display: none; /* 默认隐藏 */
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js"></script>
+</head>
+<body>
+    <div id="app">
+        <div id="id-input-section">
+            <h2>请输入ID</h2>
+            <input type="text" id="user-id" placeholder="输入ID">
+            <button onclick="checkUserId()">确认</button>
+        </div>
+        <div id="tabs">
+            <button onclick="showTab('input')">录入</button>
+            <button onclick="showTab('generate')">生成</button>
+            <button onclick="showTab('view')">查看</button>
+        </div>
+        <div id="input-tab" class="tab">
+            <h2>录入原材料</h2>
+            <div>
+                <h3>菜</h3>
+                <input type="text" id="vegetable-input" placeholder="输入菜名，用逗号分隔">
+                <button onclick="addVegetables()">添加</button>
+            </div>
+            <div>
+                <h3>肉</h3>
+                <input type="text" id="meat-input" placeholder="输入肉名，用逗号分隔">
+                <button onclick="addMeats()">添加</button>
+            </div>
+            <h2>录入菜品</h2>
+            <div>
+                <input type="text" id="dish-name" placeholder="菜品名称">
+                <input type="text" id="dish-ingredients" placeholder="所需原材料，用逗号分隔">
+                <button onclick="addDish()">添加</button>
+            </div>
+        </div>
+        <div id="generate-tab" class="tab">
+            <h2>生成菜品</h2>
+            <div>
+                <h3>菜</h3>
+                <select id="vegetable-select">
+                    <option value="none">不要</option>
+                    <option value="random">随机</option>
+                </select>
+            </div>
+            <div>
+                <h3>肉</h3>
+                <select id="meat-select">
+                    <option value="none">不要</option>
+                    <option value="random">随机</option>
+                </select>
+            </div>
+            <button onclick="generateDish()">生成菜品</button>
+            <div id="result"></div>
+        </div>
+        <div id="view-tab" class="tab">
+            <h2>查看原材料和菜品</h2>
+            <div>
+                <h3>菜</h3>
+                <div class="item-list" id="vegetable-list"></div>
+            </div>
+            <div>
+                <h3>肉</h3>
+                <div class="item-list" id="meat-list"></div>
+            </div>
+            <div>
+                <h3>菜品</h3>
+                <div class="item-list" id="dish-list"></div>
+            </div>
+        </div>
+    </div>
+    <script>
+        const supabaseUrl = 'https://xutbiokxmyqtezmeinxs.supabase.co';
+        const supabaseKey = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inh1dGJpb2t4bXlxdGV6bWVpbnhzIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NDE5NTY2OTUsImV4cCI6MjA1NzUzMjY5NX0.TY2EKvcf2WI7SM31-vSsUVuykwDLUsnRRB-CeRzOckw';
+        const supabase = supabase.createClient(supabaseUrl, supabaseKey);
+
+        let userData = {
+            vegetables: [],
+            meats: [],
+            dishes: []
+        };
+
+        async function loadData() {
+            const { data, error } = await supabase
+                .from('userData')
+                .select('*')
+                .eq('user_id', document.getElementById('user-id').value)
+                .single();
+
+            if (data) {
+                userData = data.data;
+            } else {
+                userData = { vegetables: [], meats: [], dishes: [] };
+            }
+            updateSelectOptions();
+            updateViewTab();
+            showTab('input');
+        }
+
+        async function saveData() {
+            const { data, error } = await supabase
+                .from('userData')
+                .upsert([
+                    { 
+                        user_id: document.getElementById('user-id').value, 
+                        data: userData 
+                    }
+                ]);
+
+            if (error) {
+                console.error('Error saving data:', error);
+            }
+        }
+
+        function showTab(tabName) {
+            document.querySelectorAll('.tab').forEach(tab => tab.style.display = 'none');
+            document.getElementById(`${tabName}-tab`).style.display = 'block';
+            if (tabName === 'view') {
+                updateViewTab();
+            }
+        }
+
+        async function addVegetables() {
+            const input = document.getElementById('vegetable-input').value;
+            if (!input) {
+                alert('请输入菜名');
+                return;
+            }
+            const vegetables = input.split('，');
+            userData.vegetables = [...new Set([...userData.vegetables, ...vegetables])];
+            await saveData();
+            updateSelectOptions();
+            updateViewTab();
+            document.getElementById('vegetable-input').value = '';
+        }
+
+        async function addMeats() {
+            const input = document.getElementById('meat-input').value;
+            if (!input) {
+                alert('请输入肉名');
+                return;
+            }
+            const meats = input.split('，');
+            userData.meats = [...new Set([...userData.meats, ...meats])];
+            await saveData();
+            updateSelectOptions();
+            updateViewTab();
+            document.getElementById('meat-input').value = '';
+        }
+
+        async function addDish() {
+            const name = document.getElementById('dish-name').value;
+            const ingredients = document.getElementById('dish-ingredients').value.split('，');
+            if (!name || !ingredients) {
+                alert('请输入菜品名称和所需原材料');
+                return;
+            }
+            userData.dishes.push({ name, ingredients });
+            await saveData();
+            updateViewTab();
+            document.getElementById('dish-name').value = '';
+            document.getElementById('dish-ingredients').value = '';
+        }
+
+        function updateSelectOptions() {
+            const vegetableSelect = document.getElementById('vegetable-select');
+            const meatSelect = document.getElementById('meat-select');
+            vegetableSelect.innerHTML = '<option value="none">不要</option><option value="random">随机</option>';
+            meatSelect.innerHTML = '<option value="none">不要</option><option value="random">随机</option>';
+            userData.vegetables.forEach(veg => {
+                vegetableSelect.innerHTML += `<option value="${veg}">${veg}</option>`;
+            });
+            userData.meats.forEach(meat => {
+                meatSelect.innerHTML += `<option value="${meat}">${meat}</option>`;
+            });
+        }
+
+        function generateDish() {
+            const vegetable = document.getElementById('vegetable-select').value;
+            const meat = document.getElementById('meat-select').value;
+            let filteredDishes = userData.dishes.filter(dish => {
+                const hasVegetable = vegetable === 'none' ? true : vegetable === 'random' ? dish.ingredients.some(ing => userData.vegetables.includes(ing)) : dish.ingredients.includes(vegetable);
+                const hasMeat = meat === 'none' ? true : meat === 'random' ? dish.ingredients.some(ing => userData.meats.includes(ing)) : dish.ingredients.includes(meat);
+                const noVegetable = vegetable === 'none' ? !dish.ingredients.some(ing => userData.vegetables.includes(ing)) : true;
+                const noMeat = meat === 'none' ? !dish.ingredients.some(ing => userData.meats.includes(ing)) : true;
+                return hasVegetable && hasMeat && noVegetable && noMeat;
+            });
+            const resultDiv = document.getElementById('result');
+            resultDiv.innerHTML = '';
+            if (filteredDishes.length === 0) {
+                resultDiv.innerHTML = '没有符合条件的菜品';
+            } else if (filteredDishes.length === 1) {
+                resultDiv.innerHTML = `<p>${filteredDishes[0].name}</p>`;
+            } else {
+                const randomIndex = Math.floor(Math.random() * filteredDishes.length);
+                const randomDish = filteredDishes[randomIndex];
+                resultDiv.innerHTML = `<p>${randomDish.name}</p>`;
+                filteredDishes.forEach((dish, index) => {
+                    if (index !== randomIndex) {
+                        resultDiv.innerHTML += `<p class="hidden-dish">${dish.name}</p>`;
+                    }
+                });
+                resultDiv.innerHTML += '<button onclick="showAllDishes()">展开</button>';
+            }
+        }
+
+        function showAllDishes() {
+            const hiddenDishes = document.querySelectorAll('#result .hidden-dish');
+            hiddenDishes.forEach(dish => {
+                dish.style.display = 'block';
+            });
+        }
+
+        function updateViewTab() {
+            const vegetableList = document.getElementById('vegetable-list');
+            const meatList = document.getElementById('meat-list');
+            const dishList = document.getElementById('dish-list');
+            vegetableList.innerHTML = '';
+            meatList.innerHTML = '';
+            dishList.innerHTML = '';
+
+            userData.vegetables.forEach(veg => {
+                const item = document.createElement('div');
+                item.className = 'item';
+                item.innerHTML = `
+                    <span>${veg}</span>
+                    <button class="delete-button" onclick="deleteItem('vegetables', '${veg}')">删除</button>
+                `;
+                item.addEventListener('click', () => {
+                    item.querySelector('.delete-button').style.display = 'inline-block';
+                });
+                vegetableList.appendChild(item);
+            });
+
+            userData.meats.forEach(meat => {
+                const item = document.createElement('div');
+                item.className = 'item';
+                item.innerHTML = `
+                    <span>${meat}</span>
+                    <button class="delete-button" onclick="deleteItem('meats', '${meat}')">删除</button>
+                `;
+                item.addEventListener('click', () => {
+                    item.querySelector('.delete-button').style.display = 'inline-block';
+                });
+                meatList.appendChild(item);
+            });
+
+            userData.dishes.forEach((dish, index) => {
+                const item = document.createElement('div');
+                item.className = 'item';
+                item.innerHTML = `
+                    <span>${dish.name}（${dish.ingredients.join('，')}）</span>
+                    <button class="delete-button" onclick="deleteDish(${index})">删除</button>
+                `;
+                item.addEventListener('click', () => {
+                    item.querySelector('.delete-button').style.display = 'inline-block';
+                });
+                dishList.appendChild(item);
+            });
+        }
+
+        async function deleteItem(type, item) {
+            if (type === 'vegetables') {
+                userData.vegetables = userData.vegetables.filter(veg => veg !== item);
+            } else if (type === 'meats') {
+                userData.meats = userData.meats.filter(meat => meat !== item);
+            }
+            await saveData();
+            updateSelectOptions();
+            updateViewTab();
+        }
+
+        async function deleteDish(index) {
+            userData.dishes.splice(index, 1);
+            await saveData();
+            updateViewTab();
+        }
+
+        async function checkUserId() {
+            const userId = document.getElementById('user-id').value;
+            if (userId) {
+                document.getElementById('id-input-section').style.display = 'none';
+                document.getElementById('tabs').style.display = 'block';
+                await loadData();
+            } else {
+                alert('请输入ID');
+            }
+        }
+
+        window.onload = function () {
+            document.getElementById('tabs').style.display = 'none';
+        };
+    </script>
+</body>
+</html>
